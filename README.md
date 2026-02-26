@@ -40,7 +40,8 @@ uv add requests
 
 3. 실행
 터미널에서 분석할 파이썬 파일의 경로를 인자로 넘겨 실행합니다.
-'
+
 Bash
 uv run auto_blog.py -f [분석할_파일_경로.py]
-'
+
+
