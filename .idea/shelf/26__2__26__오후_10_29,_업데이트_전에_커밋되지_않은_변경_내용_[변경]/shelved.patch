@@ -1,0 +1,132 @@
+Index: auto_blog_safe.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/auto_blog_safe.py b/auto_blog_safe.py
+new file mode 100644
+--- /dev/null	(date 1772097641097)
++++ b/auto_blog_safe.py	(date 1772097641097)
+@@ -0,0 +1,121 @@
++import requests
++import os
++import argparse
++
++
++# 여기서부터 함수(방) 시작입니다!
++def generate_and_upload_blog(file_path):
++    # 1. 원본 파일 읽기
++    if not os.path.exists(file_path):
++        print(f"❌ 오류: '{file_path}' 파일을 찾을 수 없습니다!")
++        return
++
++    with open(file_path, 'r', encoding='utf-8') as f:
++        code_content = f.read()
++
++    # 파일 이름 미리 뽑아두기 (scanner.py -> scanner)
++    base_name = os.path.basename(file_path).split('.')[0]
++
++    # 2. 로컬 AI(Ollama)에게 블로그 글 작성 지시
++    url = "http://localhost:11434/api/generate"
++    prompt = f"""
++        너는 내 기술 블로그 전속 에디터야. 
++        아래 코드는 '로컬 AI(Ollama)와 GraphQL 스니핑을 이용해 벨로그 자동 업로드를 구현한 파이썬 스크립트'야.
++
++        이 코드가 스스로 자기를 분석해서 기술 블로그 초안을 작성하려고 해.
++        아래 내용(개요)을 뼈대로 삼아서, 코드가 어떻게 400 에러를 뚫고 벨로그 비공식 API를 해킹(?)했는지 독자들에게 썰을 풀듯이 재밌게 마크다운으로 작성해 줘.
++
++        [강조할 포인트]
++        1. 로컬 LLM(qwen3)을 파이썬으로 호출한 방법
++        2. 개발자 도구로 네트워크 패킷을 스니핑해서 GraphQL 규격을 찾아낸 과정
++        3. 브라우저인 척 위장(Header Spoofing)한 부분
++
++
++    [내 코드]
++    ```python
++    {code_content}
++    ```
++    """
++    payload = {"model": "qwen3:8b", "prompt": prompt, "stream": False}
++
++    print(f"🚀 1단계: Qwen3:8b가 '{base_name}' 코드를 분석하며 글을 작성 중입니다...")
++    response = requests.post(url, json=payload)
++
++    if response.status_code != 200:
++        print(f"❌ AI 생성 실패 (에러: {response.status_code})")
++        return
++
++    result_text = response.json()['response']
++    print("✅ AI 글 작성 완료!\n")
++    # ---------------------------------------------------------
++    # 3. Velog 비공식 API로 해킹(업로드) 시도 - [완벽 위장 버전]
++    # ---------------------------------------------------------
++    print("🌐 2단계: 스니핑한 진짜 규격으로 Velog 서버에 침투 중...")
++
++    velog_url = "https://v2.velog.io/graphql"
++
++    # 🔥 [중요] 여기에 아까 복사한 토큰을 따옴표 안에 꼭 넣어주세요! 🔥
++    my_access_token = "보안상 삭제함"
++    # 사용자님이 스니핑해 온 진짜 GraphQL 쿼리문 적용!
++    graphql_query = """
++        mutation WritePost($title: String, $body: String, $tags: [String], $is_markdown: Boolean, $is_temp: Boolean, $is_private: Boolean, $url_slug: String, $thumbnail: String, $meta: JSON, $series_id: ID, $token: String) {
++          writePost(title: $title, body: $body, tags: $tags, is_markdown: $is_markdown, is_temp: $is_temp, is_private: $is_private, url_slug: $url_slug, thumbnail: $thumbnail, meta: $meta, series_id: $series_id, token: $token) {
++            id
++            url_slug
++          }
++        }
++        """
++
++    # 사용자님이 찾아낸 진짜 변수(Variables) 규격 적용!
++    variables = {
++        "title": f"🚀 [AI 자동생성] {base_name} 코드 리뷰 및 분석",
++        "body": result_text,
++        "tags": ["Python", "자동화", "포트스캐너"],
++        "is_markdown": True,
++        "is_temp": False,
++        "is_private": True,  # 일단 나만 보기
++        "url_slug": f"ai-auto-generated-{base_name}",  # URL 주소용 (띄어쓰기 금지)
++        "thumbnail": None,
++        "meta": {
++            "short_description": "AI가 코드를 분석하여 자동으로 작성한 포스팅입니다."
++        },
++        "series_id": None,
++        "token": None
++    }
++
++    # 브라우저 위장 헤더 장착
++    headers = {
++        "cookie": f"access_token={my_access_token}",
++        "Content-Type": "application/json",
++        "Origin": "https://velog.io",
++        "Referer": "https://velog.io/write",
++        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
++    }
++
++    velog_payload = {
++        "query": graphql_query,
++        "variables": variables
++    }
++
++    # 다시 발사!
++    velog_response = requests.post(velog_url, json=velog_payload, headers=headers)
++
++    if velog_response.status_code == 200:
++        if 'errors' in velog_response.json():
++            print(f"❌ 요청은 갔지만 에러가 발생했습니다.")
++            print("에러 상세:", velog_response.json()['errors'])
++        else:
++            print("🎉 대성공!! 벨로그 비공개 탭을 당장 확인해 보세요!")
++    else:
++        print(f"❌ 전송 실패... (상태 코드: {velog_response.status_code})")
++
++
++# 여기까지가 함수(방) 끝입니다!
++
++# --- 실행 파트 (제일 바깥쪽 거실) ---
++if __name__ == "__main__":
++    parser = argparse.ArgumentParser(description="🚀 코드를 읽고 벨로그에 자동 업로드하는 해킹(?) 툴")
++    parser.add_argument('-f', '--file', required=True, help="분석할 파일 경로")
++
++    args = parser.parse_args()
++    generate_and_upload_blog(args.file)
+\ No newline at end of file
