@@ -26,7 +26,7 @@ with col1:
     st.subheader("2. 프롬프트 튜닝")
     default_prompt = """너는 내 기술 블로그 전속 에디터야. 
 아래 코드를 분석하고, 독자들이 이해하기 쉽게 마크다운(Markdown) 형식으로 기술 블로그 초안을 작성해 줘.
-코드의 핵심 동작 원리를 친절하게 설명하고,이모지는 사용하지 말아줘."""
+코드의 핵심 동작 원리를 친절하게 설명하고, 이모지는 사용하지 말아줘!"""
     prompt_input = st.text_area("AI에게 내릴 세부 지시사항", value=default_prompt, height=150)
 
 # [오른쪽 화면: 결과]
