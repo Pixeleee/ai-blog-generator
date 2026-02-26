@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 import subprocess
 
-# 프롬프트 폴더 경로 (초기화 코드는 날리고 경로만 남깁니다)
+# 프롬프트 폴더 경로
 PROMPTS_DIR = "./prompts"
 
 # --- 웹 페이지 기본 설정 ---
@@ -24,30 +24,22 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("1. 템플릿 선택 및 편집")
-
-    # 프롬프트 프리셋 목록 읽어와서 드롭다운 만들기
     prompt_files = [f for f in os.listdir(PROMPTS_DIR) if f.endswith('.txt')]
     selected_preset = st.selectbox("📝 프롬프트 프리셋 선택", prompt_files)
-
-    # 선택된 프리셋 파일의 경로
     file_path = os.path.join(PROMPTS_DIR, selected_preset)
 
-    # 파일 읽어오기
     with open(file_path, "r", encoding="utf-8") as f:
         preset_content = f.read()
 
-    # 프롬프트 튜닝 창 (사용자가 여기서 텍스트를 수정하면 edited_prompt 변수에 담깁니다)
     edited_prompt = st.text_area("불러온 프리셋 (입맛대로 수정하고 아래 저장 버튼을 누르세요!)", value=preset_content, height=250)
 
-    # 🔥 [신규] 프롬프트 저장 버튼
-    if st.button("💾 저장"):
+    if st.button("💾 현재 프롬프트 덮어쓰기 (영구 저장)"):
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(edited_prompt)
         st.success(f"✅ '{selected_preset}' 파일에 변경사항이 완벽하게 저장되었습니다!")
 
-    st.divider()  # 시각적 분리선
+    st.divider()
 
-    # 코드 파일이나 텍스트 키워드 업로드
     st.subheader("2. 분석할 데이터 (코드 또는 키워드 텍스트)")
     uploaded_file = st.file_uploader("파이썬 파일(.py)이나 텍스트(.txt)를 올려주세요.", type=['py', 'txt'])
 
@@ -58,20 +50,15 @@ with col2:
         if uploaded_file is None:
             st.warning("👈 먼저 왼쪽에서 분석할 데이터 파일을 업로드해주세요!")
         else:
-            # 파일 내용 읽기
             file_content = uploaded_file.getvalue().decode("utf-8")
             base_name = uploaded_file.name.split('.')[0]
 
             url = "http://localhost:11434/api/generate"
-
-            # {today_date} 태그가 있다면 치환해서 전송 (개발 블로그용)
             today_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             final_prompt = edited_prompt.replace("{today_date}", today_date)
 
             full_prompt = f"{final_prompt}\n\n[제공된 데이터]\n```\n{file_content}\n```"
             payload = {"model": "qwen3:8b", "prompt": full_prompt, "stream": True}
-
-            st.markdown("### ✨ 완성된 초안")
 
 
             def stream_data():
@@ -86,17 +73,34 @@ with col2:
 
 
             try:
-                result_text = st.write_stream(stream_data())
+                # 🔥 [신규] 결과를 보여줄 2개의 탭 생성!
+                tab1, tab2 = st.tabs(["👁️ 블로그 미리보기", "📝 원본 마크다운 (코드)"])
 
+                with tab1:
+                    # 탭 1에서는 타자 치듯 예쁘게 렌더링 된 결과를 보여줍니다.
+                    result_text = st.write_stream(stream_data())
+
+                with tab2:
+                    # 탭 2에서는 복사하기 좋게 날것의 마크다운 코드를 보여줍니다.
+                    st.code(result_text, language="markdown")
+
+                # 파일 저장 로직
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)
-
                 output_path = os.path.join(output_dir, f"{base_name}_blog.md")
-
                 with open(output_path, "w", encoding="utf-8") as f:
                     f.write(result_text)
 
-                st.success(f"✅ 마크다운 파일 저장 완료: `{output_path}`")
+                st.success(f"✅ 마크다운 파일 로컬 저장 완료: `{output_path}`")
+
+                # 🔥 [신규] 폴더를 뒤지지 않고 웹에서 바로 다운로드하는 버튼!
+                st.download_button(
+                    label="📥 만들어진 마크다운 파일 다운로드 (.md)",
+                    data=result_text,
+                    file_name=f"{base_name}_blog.md",
+                    mime="text/markdown",
+                    type="primary"  # 눈에 띄게 파란색 버튼으로!
+                )
 
             except Exception as e:
                 st.error(f"❌ 통신 에러: {e}")
