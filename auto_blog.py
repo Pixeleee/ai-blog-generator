@@ -43,8 +43,13 @@ with col1:
     st.subheader("2. 분석할 데이터 (코드 또는 키워드 텍스트)")
     uploaded_file = st.file_uploader("파이썬 파일(.py)이나 텍스트(.txt)를 올려주세요.", type=['py', 'txt'])
 
+    # 🔥 [신규] 네이버 블로그용 다중 이미지 업로더 추가
+    st.subheader("3. 📸 첨부할 이미지 (네이버 블로그용)")
+    uploaded_images = st.file_uploader("맛집, 매장 사진 등을 여러 장 올려주세요", type=['png', 'jpg', 'jpeg'],
+                                       accept_multiple_files=True)
+
 with col2:
-    st.subheader("3. 결과 확인")
+    st.subheader("4. 결과 확인")
 
     if st.button("🚀 AI 생성 시작!", use_container_width=True):
         if uploaded_file is None:
@@ -57,7 +62,10 @@ with col2:
             today_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             final_prompt = edited_prompt.replace("{today_date}", today_date)
 
-            full_prompt = f"{final_prompt}\n\n[제공된 데이터]\n```\n{file_content}\n```"
+            # 🔥 프롬프트에 이미지 개수 정보도 살짝 넘겨줍니다.
+            image_info = f"\n[참고: 첨부된 사진 {len(uploaded_images)}장 있음. 글 중간중간 적절한 위치에 '[사진 들어갈 곳]' 이라고 표시해 줘!]" if uploaded_images else ""
+
+            full_prompt = f"{final_prompt}{image_info}\n\n[제공된 데이터]\n```\n{file_content}\n```"
             payload = {"model": "qwen3:8b", "prompt": full_prompt, "stream": True}
 
 
@@ -73,41 +81,50 @@ with col2:
 
 
             try:
-                # 🔥 [신규] 결과를 보여줄 2개의 탭 생성!
                 tab1, tab2 = st.tabs(["👁️ 블로그 미리보기", "📝 원본 마크다운 (코드)"])
 
                 with tab1:
-                    # 탭 1에서는 타자 치듯 예쁘게 렌더링 된 결과를 보여줍니다.
                     result_text = st.write_stream(stream_data())
 
                 with tab2:
-                    # 탭 2에서는 복사하기 좋게 날것의 마크다운 코드를 보여줍니다.
                     st.code(result_text, language="markdown")
 
-                # 파일 저장 로직
+                # 1. 텍스트(마크다운) 파일 저장 로직
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)
                 output_path = os.path.join(output_dir, f"{base_name}_blog.md")
                 with open(output_path, "w", encoding="utf-8") as f:
                     f.write(result_text)
-
                 st.success(f"✅ 마크다운 파일 로컬 저장 완료: `{output_path}`")
 
-                # 🔥 [신규] 폴더를 뒤지지 않고 웹에서 바로 다운로드하는 버튼!
+                # 🔥 [신규] 2. 업로드된 이미지들을 별도 폴더에 저장하는 로직
+                if uploaded_images:
+                    # 해당 포스팅 이름으로 이미지 전용 폴더 생성 (예: posts/images/포스팅제목/)
+                    img_dir = os.path.join(output_dir, "images", base_name)
+                    if not os.path.exists(img_dir):
+                        os.makedirs(img_dir)
+
+                    for img in uploaded_images:
+                        img_path = os.path.join(img_dir, img.name)
+                        with open(img_path, "wb") as f:
+                            f.write(img.getvalue())  # 이미지를 바이너리 형태로 저장
+
+                    st.success(f"📸 첨부된 이미지 {len(uploaded_images)}장이 `{img_dir}` 폴더에 안전하게 저장되었습니다!")
+
                 st.download_button(
                     label="📥 만들어진 마크다운 파일 다운로드 (.md)",
                     data=result_text,
                     file_name=f"{base_name}_blog.md",
                     mime="text/markdown",
-                    type="primary"  # 눈에 띄게 파란색 버튼으로!
+                    type="primary"
                 )
 
             except Exception as e:
                 st.error(f"❌ 통신 에러: {e}")
 
 st.divider()
-st.subheader("🚀 4. 깃허브(GitHub) 원클릭 배포 (개발 블로그용)")
-commit_msg = st.text_input("📝 커밋 메시지를 입력하세요", value="docs: 새로운 포스팅 및 템플릿 업데이트")
+st.subheader("🚀 5. 깃허브(GitHub) 원클릭 배포 (개발 블로그용)")
+commit_msg = st.text_input("📝 커밋 메시지를 입력하세요", value="docs: 새로운 포스팅 및 이미지 업데이트")
 
 if st.button("전 세계로 배포하기 (Git Push) 🌍", type="primary"):
     with st.spinner("GitHub로 데이터를 전송하는 중입니다... 🚀"):
