@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime
 import subprocess
+import pyperclip  # 🔥 클립보드 복사를 위한 신규 라이브러리!
 
 # 프롬프트 폴더 경로
 PROMPTS_DIR = "./prompts"
@@ -43,7 +44,6 @@ with col1:
     st.subheader("2. 분석할 데이터 (코드 또는 키워드 텍스트)")
     uploaded_file = st.file_uploader("파이썬 파일(.py)이나 텍스트(.txt)를 올려주세요.", type=['py', 'txt'])
 
-    # 🔥 [신규] 네이버 블로그용 다중 이미지 업로더 추가
     st.subheader("3. 📸 첨부할 이미지 (네이버 블로그용)")
     uploaded_images = st.file_uploader("맛집, 매장 사진 등을 여러 장 올려주세요", type=['png', 'jpg', 'jpeg'],
                                        accept_multiple_files=True)
@@ -62,7 +62,6 @@ with col2:
             today_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             final_prompt = edited_prompt.replace("{today_date}", today_date)
 
-            # 🔥 프롬프트에 이미지 개수 정보도 살짝 넘겨줍니다.
             image_info = f"\n[참고: 첨부된 사진 {len(uploaded_images)}장 있음. 글 중간중간 적절한 위치에 '[사진 들어갈 곳]' 이라고 표시해 줘!]" if uploaded_images else ""
 
             full_prompt = f"{final_prompt}{image_info}\n\n[제공된 데이터]\n```\n{file_content}\n```"
@@ -85,60 +84,66 @@ with col2:
 
                 with tab1:
                     result_text = st.write_stream(stream_data())
-
                 with tab2:
                     st.code(result_text, language="markdown")
 
-                # 1. 텍스트(마크다운) 파일 저장 로직
+                # 텍스트 파일 저장
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)
                 output_path = os.path.join(output_dir, f"{base_name}_blog.md")
                 with open(output_path, "w", encoding="utf-8") as f:
                     f.write(result_text)
-                st.success(f"✅ 마크다운 파일 로컬 저장 완료: `{output_path}`")
 
-                # 🔥 [신규] 2. 업로드된 이미지들을 별도 폴더에 저장하는 로직
+                # 이미지 저장
+                img_dir = ""
                 if uploaded_images:
-                    # 해당 포스팅 이름으로 이미지 전용 폴더 생성 (예: posts/images/포스팅제목/)
                     img_dir = os.path.join(output_dir, "images", base_name)
                     if not os.path.exists(img_dir):
                         os.makedirs(img_dir)
-
                     for img in uploaded_images:
                         img_path = os.path.join(img_dir, img.name)
                         with open(img_path, "wb") as f:
-                            f.write(img.getvalue())  # 이미지를 바이너리 형태로 저장
+                            f.write(img.getvalue())
 
-                    st.success(f"📸 첨부된 이미지 {len(uploaded_images)}장이 `{img_dir}` 폴더에 안전하게 저장되었습니다!")
+                st.success("✅ 생성 및 로컬 저장 완료!")
 
-                st.download_button(
-                    label="📥 만들어진 마크다운 파일 다운로드 (.md)",
-                    data=result_text,
-                    file_name=f"{base_name}_blog.md",
-                    mime="text/markdown",
-                    type="primary"
-                )
+                # ==========================================================
+                # 🔥 [신규] 네이버 퍼블리싱을 위한 마법의 버튼 영역
+                # ==========================================================
+                st.markdown("### 🎯 네이버 블로그 업로드 도구")
+                btn_col1, btn_col2 = st.columns(2)
+
+                with btn_col1:
+                    if st.button("📋 본문 전체 복사하기", type="primary", use_container_width=True):
+                        pyperclip.copy(result_text)
+                        st.toast("✅ 클립보드에 복사되었습니다! 네이버 에디터에 Ctrl+V 하세요.")
+
+                with btn_col2:
+                    # 이미지가 업로드 된 경우에만 폴더 열기 버튼 활성화
+                    if uploaded_images:
+                        if st.button("📂 이미지 폴더 열기", use_container_width=True):
+                            # 윈도우 탐색기에서 해당 폴더를 즉시 팝업!
+                            os.startfile(os.path.realpath(img_dir))
+                    else:
+                        st.button("📂 이미지 폴더 열기 (첨부된 사진 없음)", disabled=True, use_container_width=True)
 
             except Exception as e:
-                st.error(f"❌ 통신 에러: {e}")
+                st.error(f"❌ 에러 발생: {e}")
 
 st.divider()
 st.subheader("🚀 5. 깃허브(GitHub) 원클릭 배포 (개발 블로그용)")
-commit_msg = st.text_input("📝 커밋 메시지를 입력하세요", value="docs: 새로운 포스팅 및 이미지 업데이트")
+commit_msg = st.text_input("📝 커밋 메시지를 입력하세요", value="docs: 새로운 포스팅 업데이트")
 
-if st.button("전 세계로 배포하기 (Git Push) 🌍", type="primary"):
+if st.button("전 세계로 배포하기 (Git Push) 🌍"):
     with st.spinner("GitHub로 데이터를 전송하는 중입니다... 🚀"):
         try:
             subprocess.run(["git", "add", "."], check=True, capture_output=True, text=True)
             try:
                 subprocess.run(["git", "commit", "-m", commit_msg], check=True, capture_output=True, text=True)
             except subprocess.CalledProcessError as e:
-                if "nothing to commit" in e.stdout or "nothing to commit" in e.stderr:
-                    pass
-                else:
-                    raise e
+                pass
             subprocess.run(["git", "push"], check=True, capture_output=True, text=True)
-            st.success(f"🎉 성공적으로 배포되었습니다! 🌱 (커밋 메시지: {commit_msg})")
+            st.success(f"🎉 성공적으로 배포되었습니다! 🌱")
             st.balloons()
         except Exception as e:
             st.error(f"❌ 에러가 발생했습니다: {e}")
